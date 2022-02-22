@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import fetch from 'node-fetch';
 import * as net from 'net';
+import * as restify from 'restify';
 
 import {InMemoryConfig, JsonConfig} from '../infrastructure/json_config';
 import {AccessKey, AccessKeyRepository, DataLimit} from '../model/access_key';
 
 import {ManagerMetrics} from './manager_metrics';
-import {ShadowsocksManagerService} from './manager_service';
+import {bindService, ShadowsocksManagerService} from './manager_service';
 import {FakePrometheusClient, FakeShadowsocksServer} from './mocks/mocks';
 import {AccessKeyConfigJson, ServerAccessKeyRepository} from './server_access_key';
 import {ServerConfigJson} from './server_config';
@@ -734,6 +736,133 @@ describe('ShadowsocksManagerService', () => {
             }
           },
           done);
+    });
+  });
+});
+
+describe('bindService', () => {
+  let server: restify.Server;
+  let service: ShadowsocksManagerService;
+  let url: URL;
+  const PREFIX = '/TestApiPrefix';
+
+  const fakeResponse = {'foo': 'bar'};
+  const fakeHandler = async (req, res, next) => {
+    res.send(200, fakeResponse);
+    next();
+  };
+
+  beforeEach(() => {
+    server = restify.createServer();
+    service = new ShadowsocksManagerServiceBuilder().build();
+    server.listen(0);
+    url = new URL(server.url);
+  });
+
+  afterEach(() => {
+    server.close();
+  });
+
+  it('basic routing', async () => {
+    spyOn(service, "renameServer").and.callFake(fakeHandler);
+    bindService(server, PREFIX, service);
+
+    url.pathname = `${PREFIX}/name`;
+    const response = await fetch(url, {method: 'put'});
+    const body = await response.json();
+
+    expect(body).toEqual(fakeResponse);
+    expect(service.renameServer).toHaveBeenCalled();
+  });
+
+  it('parameterized routing', async () => {
+    spyOn(service, "removeAccessKeyDataLimit").and.callFake(fakeHandler);
+    bindService(server, PREFIX, service);
+
+    url.pathname = `${PREFIX}/access-keys/fake-access-key-id/data-limit`;
+    const response = await fetch(url, {method: 'delete'});
+    const body = await response.json();
+
+    expect(body).toEqual(fakeResponse);
+    expect(service.removeAccessKeyDataLimit).toHaveBeenCalled();
+  });
+
+  // Verify that we have consistent 404 behavior for all inputs.
+  [
+    '/',
+    '/TestApiPre',
+    '/foo',
+    '/TestApiPrefix123',
+    '/123TestApiPrefix',
+    '/very-long-path-that-does-not-exist',
+    `${PREFIX}/does-not-exist`,
+  ].forEach(path => {
+    it(`404 (${path})`, async () => {
+      // Ensure no methods are called on the Service.
+      spyOnAllFunctions(service);
+      jasmine.setDefaultSpyStrategy(fail);
+      bindService(server, PREFIX, service);
+
+      url.pathname = path;
+      const response = await fetch(url);
+      const body = await response.json();
+
+      expect(response.status).toEqual(404);
+      expect(body).toEqual({
+        code: 'ResourceNotFound',
+        message: `${path} does not exist`
+      });
+    });
+  });
+
+  // This is primarily a reverse testcase for the unauthorized case.
+  it(`standard routing for authorized queries`, async () => {
+    bindService(server, PREFIX, service);
+    // Verify that ordinary routing goes through the Router.
+    spyOn(server.router, "lookup").and.callThrough();
+
+    // This is an authorized request, so it will pass the prefix filter
+    // and reach the Router.
+    url.pathname = `${PREFIX}`;
+    const response = await fetch(url);
+    expect(response.status).toEqual(404);
+    await response.json();
+
+    expect(server.router.lookup).toHaveBeenCalled();
+  });
+
+  // Check that unauthorized queries are rejected without ever reaching
+  // the routing stage.
+  [
+    '/',
+    '/T',
+    '/TestApiPre',
+    '/TestApi123456',
+    '/TestApi123456789',
+  ].forEach(path => {
+    it(`no routing for unauthorized queries (${path})`, async () => {
+      bindService(server, PREFIX, service);
+      // Ensure no methods are called on the Router.
+      spyOnAllFunctions(server.router);
+      jasmine.setDefaultSpyStrategy(fail);
+
+      // Try bare pathname.
+      url.pathname = path;
+      const response1 = await fetch(url);
+      expect(response1.status).toEqual(404);
+      await response1.json();
+
+      // Try a subpath that would exist if this were a valid prefix
+      url.pathname = `${path}/server`;
+      const response2 = await fetch(url);
+      expect(response2.status).toEqual(404);
+      await response2.json();
+
+      // Try an arbitrary subpath
+      url.pathname = `${path}/does-not-exist`;
+      const response3 = await fetch(url);
+      expect(response3.status).toEqual(404);
+      await response3.json();
     });
   });
 });
