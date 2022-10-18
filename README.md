@@ -1,12 +1,12 @@
 # Outline Server
 
-![Build and Test](https://github.com/Jigsaw-Code/outline-server/actions/workflows/build_and_test_debug.yml/badge.svg?branch=master)
+![Build and Test](https://github.com/Jigsaw-Code/outline-server/actions/workflows/build_and_test_debug.yml/badge.svg?branch=master) [![Mattermost](https://badgen.net/badge/Mattermost/Outline%20Community/blue)](https://community.internetfreedomfestival.org/community/channels/outline-community) [![Reddit](https://badgen.net/badge/Reddit/r%2Foutlinevpn/orange)](https://www.reddit.com/r/outlinevpn/)
 
 This repository has all the code needed to create and manage Outline servers on
 DigitalOcean. An Outline server runs instances of Shadowsocks proxies and
 provides an API used by the Outline Manager application.
 
-Go to https://getoutline.org for ready-to-use versions of the software.
+Go to https://getoutline.org for ready-to-use versions of the software. **To join our Outline Community, [sign up for the IFF Mattermost](https://internetfreedomfestival.org/wiki/index.php/IFF_Mattermost).**
 
 ## Components
 
@@ -35,7 +35,7 @@ In order to build and run the code, you need the following installed:
 
 - [Node](https://nodejs.org/en/download/) LTS (`lts/gallium`, version `16.13.0`)
 - [NPM](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) (version `8.1.0`)
-- Manager-specic
+- Manager-specific
   - [Wine](https://www.winehq.org/download), if you would like to generate binaries for Windows.
 - Server-specific
   - [Docker](https://docs.docker.com/engine/install/), to build the Docker image and to run the integration test.
